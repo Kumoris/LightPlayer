@@ -199,7 +199,10 @@ export class AudioPlayerService {
     })
 
     this.avPlayer.on('durationUpdate', (duration: number) => {
+      console.info('AudioPlayerService', `Duration updated: ${duration}ms`)
       this.playState.duration = duration
+      // 立即通知监听器 duration 变化
+      this.notifyProgressChanged(this.playState.currentPosition, duration)
     })
 
     this.avPlayer.on('timeUpdate', (time: number) => {
@@ -230,6 +233,9 @@ export class AudioPlayerService {
         this.playState.playerState = PlayerState.PREPARED
         if (this.avPlayer) {
           this.playState.duration = this.avPlayer.duration
+          console.info('AudioPlayerService', `Prepared with duration: ${this.playState.duration}ms`)
+          // 立即通知 duration，确保 UI 能显示
+          this.notifyProgressChanged(0, this.playState.duration)
         }
         this.notifyStateChanged(PlayerState.PREPARED)
 
@@ -586,6 +592,7 @@ export class AudioPlayerService {
 
   /**
    * 开始进度计时器
+   * 使用 500ms 间隔确保进度条更新更平滑
    */
   private startProgressTimer(): void {
     this.stopProgressTimer()
@@ -593,10 +600,13 @@ export class AudioPlayerService {
       if (this.avPlayer) {
         const position = this.avPlayer.currentTime
         const duration = this.avPlayer.duration
+        // 更新本地状态
         this.playState.currentPosition = position
+        this.playState.duration = duration
+        // 通知监听器
         this.notifyProgressChanged(position, duration)
       }
-    }, 1000)
+    }, 500) // 500ms 更新一次，更平滑
   }
 
   /**

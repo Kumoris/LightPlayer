@@ -20,8 +20,8 @@ struct PlayerPage {
   @StorageLink(PlayStateKeys.IS_PLAYING) @Watch('onPlayingStateChange') isPlaying: boolean = false
   @StorageLink(PlayStateKeys.PLAY_MODE) playMode: number = PlayMode.SEQUENCE
   @StorageLink(PlayStateKeys.CURRENT_POSITION) currentPosition: number = 0
+  @StorageLink(PlayStateKeys.CURRENT_DURATION) currentDuration: number = 0
 
-  @State private isFavorite: boolean = false
   @State private isDragging: boolean = false
   @State private dragPosition: number = 0
   @State private coverRotation: number = 0  // 封面旋转角度
@@ -160,14 +160,31 @@ struct PlayerPage {
   }
 
   /**
+   * 获取有效的时长（优先使用实时播放器时长）
+   */
+  private getValidDuration(): number {
+    if (this.currentDuration > 0) {
+      return this.currentDuration
+    }
+    return this.getCurrentSong()?.duration || 0
+  }
+
+  /**
+   * 判断是否有有效时长
+   */
+  private hasValidDuration(): boolean {
+    return this.getValidDuration() > 0
+  }
+
+  /**
    * 获取进度百分比
    */
   private getProgressPercent(): number {
-    const song = this.getCurrentSong()
-    if (!song || song.duration === 0) {
+    const duration = this.getValidDuration()
+    if (duration === 0) {
       return 0
     }
-    return (this.getDisplayPosition() / song.duration) * 100
+    return (this.getDisplayPosition() / duration) * 100
   }
 
   build() {
@@ -215,7 +232,7 @@ struct PlayerPage {
 
       // 标题区域
       Column() {
-        Text('正在播放')
+        Text(this.isPlaying ? '正在播放' : '已暂停')
           .fontSize(12)
           .fontColor('rgba(255, 255, 255, 0.7)')
 
@@ -330,58 +347,6 @@ struct PlayerPage {
         .margin({ top: 8 })
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
-
-      // 操作按钮行
-      Row() {
-        // 收藏按钮
-        Column() {
-          Image($r('app.media.ic_scan'))
-            .width(24)
-            .height(24)
-            .fillColor(this.isFavorite ? '#FF6B6B' : 'rgba(255, 255, 255, 0.6)')
-        }
-        .onClick(() => {
-          this.isFavorite = !this.isFavorite
-          console.info('PlayerPage', `Favorite button clicked, isFavorite: ${this.isFavorite}`)
-        })
-
-        // 下载按钮
-        Column() {
-          Image($r('app.media.ic_scan'))
-            .width(24)
-            .height(24)
-            .fillColor('rgba(255, 255, 255, 0.6)')
-        }
-        .margin({ left: 32 })
-        .onClick(() => {
-          console.info('PlayerPage', 'Download button clicked')
-        })
-
-        // 评论按钮
-        Column() {
-          Image($r('app.media.ic_more'))
-            .width(24)
-            .height(24)
-            .fillColor('rgba(255, 255, 255, 0.6)')
-        }
-        .margin({ left: 32 })
-        .onClick(() => {
-          console.info('PlayerPage', 'Comment button clicked')
-        })
-
-        // 分享按钮
-        Column() {
-          Image($r('app.media.ic_search'))
-            .width(24)
-            .height(24)
-            .fillColor('rgba(255, 255, 255, 0.6)')
-        }
-        .margin({ left: 32 })
-        .onClick(() => {
-          console.info('PlayerPage', 'Share button clicked')
-        })
-      }
-      .margin({ top: 20 })
     }
     .width('100%')
     .padding({ left: 32, right: 32 })
@@ -399,13 +364,14 @@ struct PlayerPage {
         style: SliderStyle.OutSet
       })
         .blockColor('#FFFFFF')
+        .blockSize({ width: 16, height: 16 })
         .trackColor('rgba(255, 255, 255, 0.3)')
         .selectedColor('#FFFFFF')
         .width('100%')
         .onChange((value: number, mode: SliderChangeMode) => {
-          const song = this.getCurrentSong()
-          if (song && song.duration > 0) {
-            const newPosition = (value / 100) * song.duration
+          const duration = this.getValidDuration()
+          if (duration > 0) {
+            const newPosition = (value / 100) * duration
 
             if (mode === SliderChangeMode.Begin) {
               // 开始拖动
@@ -430,13 +396,15 @@ struct PlayerPage {
 
       // 时间显示
       Row() {
-        Text(TimeUtils.formatDuration(this.getDisplayPosition()))
+        // 当前播放时间
+        Text(this.hasValidDuration() ? TimeUtils.formatDuration(this.getDisplayPosition()) : '--:--')
           .fontSize(12)
           .fontColor('rgba(255, 255, 255, 0.6)')
 
         Blank()
 
-        Text(TimeUtils.formatDuration(this.getCurrentSong()?.duration || 0))
+        // 总时长（使用实时 duration）
+        Text(this.hasValidDuration() ? TimeUtils.formatDuration(this.getValidDuration()) : '--:--')
           .fontSize(12)
           .fontColor('rgba(255, 255, 255, 0.6)')
       }
@@ -453,30 +421,28 @@ struct PlayerPage {
     Column() {
       // 主控制按钮行
       Row() {
-        // 播放模式按钮
-        Column() {
-          Image(this.getModeIcon())
-            .width(26)
-            .height(26)
-            .fillColor('rgba(255, 255, 255, 0.8)')
-        }
-        .onClick(() => {
-          this.togglePlayMode()
-        })
+        // 播放模式按钮（弱化显示）
+        Image(this.getModeIcon())
+          .width(22)
+          .height(22)
+          .fillColor('rgba(255, 255, 255, 0.35)')
+          .onClick(() => {
+            this.togglePlayMode()
+          })
 
         Blank()
 
-        // 上一首
+        // 上一首（贴近播放键，对比度降低）
         Image($r('app.media.ic_previous'))
-          .width(36)
-          .height(36)
-          .fillColor('#FFFFFF')
+          .width(32)
+          .height(32)
+          .fillColor('rgba(255, 255, 255, 0.7)')
           .onClick(() => {
             console.info('PlayerPage', 'Previous button clicked')
             this.playController.playPrevious()
           })
 
-        // 播放/暂停按钮
+        // 播放/暂停按钮（最大尺寸，纯白最高对比）
         Stack() {
           Circle()
             .width(72)
@@ -488,17 +454,17 @@ struct PlayerPage {
             .height(32)
             .fillColor('#764ba2')
         }
-        .margin({ left: 28, right: 28 })
+        .margin({ left: 20, right: 20 })
         .onClick(() => {
           console.info('PlayerPage', `Play/Pause button clicked, current state: ${this.isPlaying}`)
           this.playController.togglePlayPause()
         })
 
-        // 下一首
+        // 下一首（贴近播放键，对比度降低）
         Image($r('app.media.ic_next'))
-          .width(36)
-          .height(36)
-          .fillColor('#FFFFFF')
+          .width(32)
+          .height(32)
+          .fillColor('rgba(255, 255, 255, 0.7)')
           .onClick(() => {
             console.info('PlayerPage', 'Next button clicked')
             this.playController.playNext()
@@ -506,27 +472,26 @@ struct PlayerPage {
 
         Blank()
 
-        // 播放列表按钮
-        Column() {
-          Image($r('app.media.ic_playlist'))
-            .width(26)
-            .height(26)
-            .fillColor('rgba(255, 255, 255, 0.8)')
-        }
-        .onClick(() => {
-          console.info('PlayerPage', 'Playlist button clicked')
-          this.playQueueDialogController.open()
-        })
+        // 播放列表按钮（弱化显示）
+        Image($r('app.media.ic_playlist'))
+          .width(22)
+          .height(22)
+          .fillColor('rgba(255, 255, 255, 0.35)')
+          .onClick(() => {
+            console.info('PlayerPage', 'Playlist button clicked')
+            this.playQueueDialogController.open()
+          })
       }
       .width('100%')
+      .height(72)
       .padding({ left: 32, right: 32 })
       .alignItems(VerticalAlign.Center)
 
-      // 播放模式提示
+      // 播放模式提示（更弱化）
       Text(this.getModeName())
-        .fontSize(11)
-        .fontColor('rgba(255, 255, 255, 0.5)')
-        .margin({ top: 16 })
+        .fontSize(10)
+        .fontColor('rgba(255, 255, 255, 0.35)')
+        .margin({ top: 12 })
     }
     .width('100%')
   }

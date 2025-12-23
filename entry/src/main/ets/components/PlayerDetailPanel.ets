@@ -1,9 +1,11 @@
+import { promptAction } from '@kit.ArkUI'
 import { Song } from '../model/Song'
 import { PlayMode } from '../model/PlayState'
 import { TimeUtils } from '../common/utils/TimeUtils'
 import { PlayStateKeys, parseSongFromJson } from '../common/GlobalPlayState'
 import { PlayController } from '../common/PlayController'
 import { PlayQueueService } from '../service/PlayQueueService'
+import { FavoriteService } from '../service/FavoriteService'
 import { PlayQueuePanel } from './PlayQueuePanel'
 
 /**
@@ -18,19 +20,21 @@ export struct PlayerDetailPanel {
   @StorageLink(PlayStateKeys.IS_PLAYING) @Watch('onPlayingStateChange') isPlaying: boolean = false
   @StorageLink(PlayStateKeys.PLAY_MODE) playMode: number = PlayMode.SEQUENCE
   @StorageLink(PlayStateKeys.CURRENT_POSITION) currentPosition: number = 0
+  @StorageLink(PlayStateKeys.CURRENT_DURATION) currentDuration: number = 0
 
   // 展开状态（由父组件控制）
   @Link isExpanded: boolean
 
-  @State private isFavorite: boolean = false
   @State private isDragging: boolean = false
   @State private dragPosition: number = 0
   @State private coverRotation: number = 0
   @State private panelOffset: number = 0 // 面板偏移量（用于拖拽手势）
+  @State private isFavorite: boolean = false
 
   // 播放控制器
   private playController: PlayController = PlayController.getInstance()
   private queueService: PlayQueueService = PlayQueueService.getInstance()
+  private favoriteService: FavoriteService = FavoriteService.getInstance()
   private rotationTimer: number = -1
 
   // 面板高度
@@ -52,6 +56,32 @@ export struct PlayerDetailPanel {
     console.info('PlayerDetailPanel', 'aboutToAppear')
     if (this.isPlaying) {
       this.startRotation()
+    }
+    // 初始化收藏状态
+    this.updateFavoriteState()
+  }
+
+  /**
+   * 更新收藏状态
+   */
+  private updateFavoriteState(): void {
+    const song = this.getCurrentSong()
+    if (song) {
+      this.isFavorite = this.favoriteService.isFavorite(song.id)
+    }
+  }
+
+  /**
+   * 切换收藏状态
+   */
+  private toggleFavorite(): void {
+    const song = this.getCurrentSong()
+    if (song) {
+      this.isFavorite = this.favoriteService.toggleFavorite(song.id)
+      promptAction.showToast({
+        message: this.isFavorite ? '已添加到收藏' : '已取消收藏',
+        duration: 1500
+      })
     }
   }
 
@@ -155,10 +185,25 @@ export struct PlayerDetailPanel {
 
   /**
    * 判断是否有有效时长
+   * 优先使用实时 duration
    */
   private hasValidDuration(): boolean {
+    if (this.currentDuration > 0) {
+      return true
+    }
     const song = this.getCurrentSong()
     return song !== null && song.duration > 0
+  }
+
+  /**
+   * 获取有效的 duration
+   * 优先使用实时播放器的 duration
+   */
+  private getValidDuration(): number {
+    if (this.currentDuration > 0) {
+      return this.currentDuration
+    }
+    return this.getCurrentSong()?.duration || 0
   }
 
   /**
@@ -200,9 +245,14 @@ export struct PlayerDetailPanel {
   /**
    * 切换播放模式
    */
-  private togglePlayMode(): void {
-    this.playController.togglePlayMode()
-    console.info('PlayerDetailPanel', `Play mode changed to: ${this.getModeName()}`)
+  private async togglePlayMode(): Promise<void> {
+    const newMode = await this.playController.togglePlayMode()
+    const modeName = this.getModeName()
+    console.info('PlayerDetailPanel', `Play mode changed to: ${modeName}`)
+    promptAction.showToast({
+      message: modeName,
+      duration: 1500
+    })
   }
 
   /**
@@ -214,13 +264,15 @@ export struct PlayerDetailPanel {
 
   /**
    * 获取进度百分比
+   * 使用实时 duration 确保准确性
    */
   private getProgressPercent(): number {
-    const song = this.getCurrentSong()
-    if (!song || song.duration === 0) {
+    const duration = this.getValidDuration()
+    if (duration === 0) {
       return 0
     }
-    return (this.getDisplayPosition() / song.duration) * 100
+    const percent = (this.getDisplayPosition() / duration) * 100
+    return Math.min(100, Math.max(0, percent))
   }
 
   /**
@@ -277,7 +329,7 @@ export struct PlayerDetailPanel {
 
         // 标题区域
         Column() {
-          Text('正在播放')
+          Text(this.isPlaying ? '正在播放' : '已暂停')
             .fontSize(12)
             .fontColor('rgba(255, 255, 255, 0.7)')
 
@@ -441,47 +493,15 @@ export struct PlayerDetailPanel {
           .height(21) // 15 fontSize + 6 margin
       }
 
-      // 操作按钮行
-      Row() {
-        // 收藏按钮
-        Column() {
-          Image($r('app.media.ic_scan'))
-            .width(22)
-            .height(22)
-            .fillColor(this.isFavorite ? '#FF6B6B' : 'rgba(255, 255, 255, 0.6)')
-        }
+      // 收藏按钮
+      Image(this.isFavorite ? $r('app.media.ic_favorite_filled') : $r('app.media.ic_favorite'))
+        .width(28)
+        .height(28)
+        .fillColor(this.isFavorite ? '#FF6B6B' : 'rgba(255, 255, 255, 0.6)')
+        .margin({ top: 16 })
         .onClick(() => {
-          this.isFavorite = !this.isFavorite
+          this.toggleFavorite()
         })
-
-        // 下载按钮
-        Column() {
-          Image($r('app.media.ic_scan'))
-            .width(22)
-            .height(22)
-            .fillColor('rgba(255, 255, 255, 0.6)')
-        }
-        .margin({ left: 28 })
-
-        // 评论按钮
-        Column() {
-          Image($r('app.media.ic_more'))
-            .width(22)
-            .height(22)
-            .fillColor('rgba(255, 255, 255, 0.6)')
-        }
-        .margin({ left: 28 })
-
-        // 分享按钮
-        Column() {
-          Image($r('app.media.ic_search'))
-            .width(22)
-            .height(22)
-            .fillColor('rgba(255, 255, 255, 0.6)')
-        }
-        .margin({ left: 28 })
-      }
-      .margin({ top: 16 })
     }
     .width('100%')
     .padding({ left: 28, right: 28 })
@@ -499,13 +519,14 @@ export struct PlayerDetailPanel {
         style: SliderStyle.OutSet
       })
         .blockColor('#FFFFFF')
+        .blockSize({ width: 16, height: 16 })
         .trackColor('rgba(255, 255, 255, 0.3)')
         .selectedColor('#FFFFFF')
         .width('100%')
         .onChange((value: number, mode: SliderChangeMode) => {
-          const song = this.getCurrentSong()
-          if (song && song.duration > 0) {
-            const newPosition = (value / 100) * song.duration
+          const duration = this.getValidDuration()
+          if (duration > 0) {
+            const newPosition = (value / 100) * duration
 
             if (mode === SliderChangeMode.Begin) {
               this.isDragging = true
@@ -530,8 +551,8 @@ export struct PlayerDetailPanel {
 
         Blank()
 
-        // 总时长
-        Text(this.hasValidDuration() ? TimeUtils.formatDuration(this.getCurrentSong()?.duration || 0) : '--:--')
+        // 总时长（使用实时 duration）
+        Text(this.hasValidDuration() ? TimeUtils.formatDuration(this.getValidDuration()) : '--:--')
           .fontSize(11)
           .fontColor('rgba(255, 255, 255, 0.6)')
       }
@@ -548,13 +569,21 @@ export struct PlayerDetailPanel {
     Column() {
       // 主控制按钮行
       Row() {
-        // 播放模式按钮
-        Column() {
+        // 播放模式按钮 - 圆角胶囊样式，图标+文字
+        Row() {
           Image(this.getModeIcon())
-            .width(24)
-            .height(24)
-            .fillColor('rgba(255, 255, 255, 0.8)')
+            .width(16)
+            .height(16)
+            .fillColor('#FFFFFF')
+
+          Text(this.getModeName())
+            .fontSize(10)
+            .fontColor('#FFFFFF')
+            .margin({ left: 4 })
         }
+        .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+        .borderRadius(14)
+        .backgroundColor('rgba(255, 255, 255, 0.2)')
         .onClick(() => {
           this.togglePlayMode()
         })
@@ -565,7 +594,7 @@ export struct PlayerDetailPanel {
         Image($r('app.media.ic_previous'))
           .width(32)
           .height(32)
-          .fillColor('#FFFFFF')
+          .fillColor('rgba(255, 255, 255, 0.7)')
           .onClick(() => {
             this.playController.playPrevious()
           })
@@ -591,33 +620,35 @@ export struct PlayerDetailPanel {
         Image($r('app.media.ic_next'))
           .width(32)
           .height(32)
-          .fillColor('#FFFFFF')
+          .fillColor('rgba(255, 255, 255, 0.7)')
           .onClick(() => {
             this.playController.playNext()
           })
 
         Blank()
 
-        // 播放列表按钮
-        Column() {
+        // 播放列表按钮 - 也改为胶囊样式
+        Row() {
           Image($r('app.media.ic_playlist'))
-            .width(24)
-            .height(24)
-            .fillColor('rgba(255, 255, 255, 0.8)')
+            .width(16)
+            .height(16)
+            .fillColor('#FFFFFF')
+
+          Text('列表')
+            .fontSize(10)
+            .fontColor('#FFFFFF')
+            .margin({ left: 4 })
         }
+        .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+        .borderRadius(14)
+        .backgroundColor('rgba(255, 255, 255, 0.2)')
         .onClick(() => {
           this.playQueueDialogController.open()
         })
       }
       .width('100%')
-      .padding({ left: 28, right: 28 })
+      .padding({ left: 20, right: 20 })
       .alignItems(VerticalAlign.Center)
-
-      // 播放模式提示
-      Text(this.getModeName())
-        .fontSize(10)
-        .fontColor('rgba(255, 255, 255, 0.5)')
-        .margin({ top: 12 })
     }
     .width('100%')
   }

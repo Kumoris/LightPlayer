@@ -1,4 +1,5 @@
-import { router } from '@kit.ArkUI'
+import { router, promptAction } from '@kit.ArkUI'
+import { PlayMode } from '../model/PlayState'
 import { common } from '@kit.AbilityKit'
 import { Song } from '../model/Song'
 import { Playlist } from '../model/Playlist'
@@ -11,6 +12,7 @@ import { GlobalPlayState, PlayStateKeys, parseSongFromJson } from '../common/Glo
 import { PlayController } from '../common/PlayController'
 import { PermissionManager } from '../common/PermissionManager'
 import { MusicScanService, ScanProgressCallback, ScanStatus } from '../service/MusicScanService'
+import { FavoriteService } from '../service/FavoriteService'
 import { SongDataSource } from '../common/LazyDataSource'
 import { SongRepository } from '../data/repository/SongRepository'
 
@@ -40,8 +42,9 @@ enum SortOrder {
 struct Index {
   @State private currentTabIndex: number = 0
   @State private songs: Song[] = []
+  @State private favoriteSongs: Song[] = []
   @State private playlists: Playlist[] = []
-  @State private isLoading: boolean = true
+  @State private isPageLoading: boolean = true
   @State private isScanningMusic: boolean = false
   @State private scanProgress: number = 0
   @State private scanTotal: number = 0
@@ -64,7 +67,10 @@ struct Index {
   // 使用 @StorageLink 连接全局播放状态
   @StorageLink(PlayStateKeys.CURRENT_SONG) currentSongJson: string = ''
   @StorageLink(PlayStateKeys.IS_PLAYING) isPlaying: boolean = false
+  @StorageLink(PlayStateKeys.IS_LOADING) isLoading: boolean = false
+  @StorageLink(PlayStateKeys.PLAY_MODE) playMode: number = 0
   @StorageLink(PlayStateKeys.CURRENT_POSITION) currentPosition: number = 0
+  @StorageLink(PlayStateKeys.CURRENT_DURATION) currentDuration: number = 0
   @StorageLink(PlayStateKeys.CURRENT_INDEX) @Watch('onCurrentIndexChange') currentIndex: number = -1
 
   // 播放控制器
@@ -72,6 +78,7 @@ struct Index {
   private permissionManager: PermissionManager = PermissionManager.getInstance()
   private musicScanService: MusicScanService = MusicScanService.getInstance()
   private songRepository: SongRepository = SongRepository.getInstance()
+  private favoriteService: FavoriteService = FavoriteService.getInstance()
   private context: common.UIAbilityContext | null = null
 
   // 列表滚动控制器
@@ -129,7 +136,7 @@ struct Index {
    * 初始化音乐库
    */
   private async initializeMusicLibrary(): Promise<void> {
-    this.isLoading = true
+    this.isPageLoading = true
     this.scanStatusText = '正在初始化...'
 
     try {
@@ -140,7 +147,7 @@ struct Index {
         console.info('Index', `Loaded ${cachedSongs.length} songs from database`)
         this.songs = cachedSongs
         this.updateGlobalState()
-        this.isLoading = false
+        this.isPageLoading = false
         this.scanStatusText = ''
       } else {
         // 没有缓存，检查权限并扫描
@@ -229,14 +236,14 @@ struct Index {
         console.info('Index', `Scan completed, found ${songs.length} songs`)
         this.songs = songs
         this.isScanningMusic = false
-        this.isLoading = false
+        this.isPageLoading = false
         this.scanStatusText = ''
         this.updateGlobalState()
       },
       onError: (error: string) => {
         console.error('Index', `Scan error: ${error}`)
         this.isScanningMusic = false
-        this.isLoading = false
+        this.isPageLoading = false
         this.scanStatusText = ''
         // 使用模拟数据作为后备
         if (this.songs.length === 0) {
@@ -259,10 +266,22 @@ struct Index {
   private loadMockData(): void {
     console.info('Index', 'Loading mock data')
     this.songs = MockData.getMockSongs()
-    this.isLoading = false
+    this.isPageLoading = false
     this.isScanningMusic = false
     this.scanStatusText = ''
     this.updateGlobalState()
+  }
+
+  /**
+   * 加载收藏歌曲列表
+   */
+  private async loadFavoriteSongs(): Promise<void> {
+    try {
+      this.favoriteSongs = await this.favoriteService.getFavoriteSongs()
+      console.info('Index', `Loaded ${this.favoriteSongs.length} favorite songs`)
+    } catch (error) {
+      console.error('Index', `Load favorite songs failed: ${JSON.stringify(error)}`)
+    }
   }
 
   /**
@@ -485,13 +504,13 @@ struct Index {
           this.updateGlobalState()
         }
         this.isScanningMusic = false
-        this.isLoading = false
+        this.isPageLoading = false
         this.scanStatusText = ''
       },
       onError: (error: string) => {
         console.error('Index', `File selection error: ${error}`)
         this.isScanningMusic = false
-        this.isLoading = false
+        this.isPageLoading = false
         this.scanStatusText = ''
       }
     }
@@ -510,6 +529,23 @@ struct Index {
    */
   private getCurrentSong(): Song | null {
     return parseSongFromJson(this.currentSongJson)
+  }
+
+  /**
+   * 获取播放模式名称
+   */
+  private getPlayModeName(mode: number): string {
+    switch (mode) {
+      case PlayMode.LOOP:
+        return '列表循环'
+      case PlayMode.SINGLE:
+        return '单曲循环'
+      case PlayMode.SHUFFLE:
+        return '随机播放'
+      case PlayMode.SEQUENCE:
+      default:
+        return '顺序播放'
+    }
   }
 
   /**
@@ -558,6 +594,8 @@ struct Index {
         if (this.currentTabIndex === 0) {
           this.SongListContent()
         } else if (this.currentTabIndex === 1) {
+          this.FavoriteContent()
+        } else if (this.currentTabIndex === 2) {
           this.PlaylistContent()
         } else {
           this.SettingsContent()
@@ -568,13 +606,15 @@ struct Index {
       .backgroundColor('#F5F5F5')
 
       // 底部迷你播放器
-      if (this.currentSongJson && !this.isLoading && !this.isPlayerDetailExpanded) {
+      if (this.currentSongJson && !this.isPlayerDetailExpanded) {
         MiniPlayer({
           currentSongJson: this.currentSongJson,
           isPlaying: this.isPlaying,
+          isLoading: this.isLoading,
+          playMode: this.playMode,
           progress: this.getProgressPercent(),
           currentPosition: this.currentPosition,
-          duration: this.getCurrentSong()?.duration || 0,
+          duration: this.currentDuration > 0 ? this.currentDuration : (this.getCurrentSong()?.duration || 0),
           onPlayPauseClick: () => {
             console.info('Index', `MiniPlayer play/pause clicked, current isPlaying: ${this.isPlaying}`)
             this.playController.togglePlayPause()
@@ -590,6 +630,14 @@ struct Index {
           onPlaylistClick: () => {
             console.info('Index', 'MiniPlayer playlist clicked')
             this.playQueueDialogController.open()
+          },
+          onPlayModeClick: async () => {
+            console.info('Index', 'MiniPlayer play mode clicked')
+            const newMode = await this.playController.togglePlayMode()
+            promptAction.showToast({
+              message: this.getPlayModeName(newMode),
+              duration: 1500
+            })
           },
           onSeek: (position: number) => {
             console.info('Index', `MiniPlayer seek to: ${position}ms`)
@@ -632,13 +680,17 @@ struct Index {
 
   /**
    * 获取进度百分比
+   * 优先使用实时 duration，其次使用歌曲元数据 duration
    */
   private getProgressPercent(): number {
-    const currentSong = this.getCurrentSong()
-    if (!currentSong || currentSong.duration === 0) {
+    // 优先使用实时播放器的 duration
+    const duration = this.currentDuration > 0 ? this.currentDuration : (this.getCurrentSong()?.duration || 0)
+    if (duration === 0) {
       return 0
     }
-    return (this.currentPosition / currentSong.duration) * 100
+    const percent = (this.currentPosition / duration) * 100
+    // 确保百分比在 0-100 范围内
+    return Math.min(100, Math.max(0, percent))
   }
 
   /**
@@ -699,7 +751,7 @@ struct Index {
         .margin({ left: 16 })
         .onClick(() => {
           console.info('Index', 'Settings button clicked')
-          this.currentTabIndex = 2
+          this.currentTabIndex = 3
         })
     }
     .width('100%')
@@ -712,8 +764,9 @@ struct Index {
   TabBar() {
     Row() {
       this.TabItem('歌曲', 0)
-      this.TabItem('播放列表', 1)
-      this.TabItem('设置', 2)
+      this.TabItem('收藏', 1)
+      this.TabItem('播放列表', 2)
+      this.TabItem('设置', 3)
     }
     .width('100%')
     .height(44)
@@ -748,7 +801,7 @@ struct Index {
 
   @Builder
   SongListContent() {
-    if (this.isLoading || this.isScanningMusic) {
+    if (this.isPageLoading || this.isScanningMusic) {
       // 加载/扫描中状态
       Column() {
         LoadingProgress()
@@ -893,6 +946,95 @@ struct Index {
   }
 
   @Builder
+  FavoriteContent() {
+    Column() {
+      if (this.favoriteSongs.length === 0) {
+        // 空状态
+        Column() {
+          Image($r('app.media.ic_favorite'))
+            .width(80)
+            .height(80)
+            .fillColor('#CCCCCC')
+
+          Text('暂无收藏歌曲')
+            .fontSize(14)
+            .fontColor('#999999')
+            .margin({ top: 16 })
+
+          Text('在播放页点击爱心即可收藏歌曲')
+            .fontSize(12)
+            .fontColor('#CCCCCC')
+            .margin({ top: 8 })
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .justifyContent(FlexAlign.Center)
+      } else {
+        // 收藏歌曲统计
+        Row() {
+          Text(`共 ${this.favoriteSongs.length} 首收藏`)
+            .fontSize(13)
+            .fontColor('#999999')
+
+          Blank()
+
+          Row() {
+            Image($r('app.media.ic_play'))
+              .width(16)
+              .height(16)
+              .fillColor('#007AFF')
+            Text('播放全部')
+              .fontSize(13)
+              .fontColor('#007AFF')
+              .margin({ left: 4 })
+          }
+          .onClick(() => {
+            console.info('Index', 'Play all favorites clicked')
+            if (this.favoriteSongs.length > 0) {
+              this.playController.playSong(this.favoriteSongs[0], 0, this.favoriteSongs)
+            }
+          })
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+        .backgroundColor('#FFFFFF')
+
+        // 收藏歌曲列表
+        List() {
+          ForEach(this.favoriteSongs, (song: Song, index: number) => {
+            ListItem() {
+              MusicItem({
+                song: song,
+                index: index,
+                isPlaying: this.getCurrentSong()?.id === song.id && this.isPlaying,
+                onItemClick: (s: Song, idx: number) => {
+                  console.info('Index', `Favorite song clicked: ${s.title}`)
+                  this.playController.playSong(s, idx, this.favoriteSongs)
+                },
+                onMoreClick: (s: Song) => {
+                  console.info('Index', `Favorite song more clicked: ${s.title}`)
+                }
+              })
+            }
+          }, (song: Song) => song.id.toString())
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .padding({ bottom: this.currentSongJson ? 70 : 0 })
+        .divider({ strokeWidth: 0.5, color: '#F0F0F0', startMargin: 88, endMargin: 16 })
+        .scrollBar(BarState.Off)
+        .edgeEffect(EdgeEffect.Spring)
+      }
+    }
+    .width('100%')
+    .layoutWeight(1)
+    .onAppear(() => {
+      // 每次切换到收藏 Tab 时刷新列表
+      this.loadFavoriteSongs()
+    })
+  }
+
+  @Builder
   PlaylistContent() {
     Column() {
       if (this.playlists.length === 0) {
@@ -912,7 +1054,7 @@ struct Index {
       } else {
         // 创建新播放列表按钮
         Row() {
-          Image($r('app.media.ic_scan'))
+          Image($r('app.media.ic_add'))
             .width(20)
             .height(20)
             .fillColor('#007AFF')

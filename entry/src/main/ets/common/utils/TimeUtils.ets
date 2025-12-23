@@ -4,13 +4,18 @@
 export class TimeUtils {
   /**
    * 将毫秒转换为 mm:ss 格式
+   * @param ms 毫秒数
+   * @param placeholder 无效值时的占位符，默认 '0:00'
    */
-  static formatDuration(ms: number): string {
-    if (ms < 0) {
-      return '0:00'
+  static formatDuration(ms: number, placeholder: string = '0:00'): string {
+    // 处理无效值：负数、NaN、Infinity
+    if (ms < 0 || !Number.isFinite(ms)) {
+      return placeholder
     }
-    const minutes = Math.floor(ms / 60000)
-    const seconds = Math.floor((ms % 60000) / 1000)
+    // 四舍五入到最近的秒
+    const totalMs = Math.round(ms)
+    const minutes = Math.floor(totalMs / 60000)
+    const seconds = Math.floor((totalMs % 60000) / 1000)
     return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 

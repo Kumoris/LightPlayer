@@ -1,3 +1,4 @@
+import { promptAction } from '@kit.ArkUI'
 import { Song } from '../model/Song'
 import { PlayMode } from '../model/PlayState'
 import { PlayQueueService } from '../service/PlayQueueService'
@@ -54,6 +55,11 @@ export struct PlayQueuePanel {
    */
   private async togglePlayMode(): Promise<void> {
     this.playMode = await this.queueService.togglePlayMode()
+    const modeName = this.getPlayModeName()
+    promptAction.showToast({
+      message: modeName,
+      duration: 1500
+    })
   }
 
   /**

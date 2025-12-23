@@ -113,6 +113,9 @@ export class PlayController implements PlayerEventListener {
   async playSong(song: Song, index: number, playlist?: Song[]): Promise<boolean> {
     console.info('PlayController', `playSong: ${song.title} at index ${index}`)
 
+    // 设置加载状态
+    this.globalState.setIsLoading(true)
+
     // 如果提供了播放列表，更新队列
     if (playlist && playlist.length > 0) {
       this.queueService.setQueue(playlist, index)
@@ -131,6 +134,8 @@ export class PlayController implements PlayerEventListener {
 
     // 调用播放服务（会自动开始播放）
     const result = await this.audioService.play(song)
+    // 加载完成，清除加载状态（成功或失败都清除）
+    this.globalState.setIsLoading(false)
     return result
   }
 
@@ -247,6 +252,10 @@ export class PlayController implements PlayerEventListener {
    */
   onProgressChanged(position: number, duration: number): void {
     this.globalState.setCurrentPosition(position)
+    // 同步更新实际播放时长（比歌曲元数据更准确）
+    if (duration > 0) {
+      this.globalState.setCurrentDuration(duration)
+    }
   }
 
   /**
@@ -262,6 +271,7 @@ export class PlayController implements PlayerEventListener {
    */
   onError(error: string): void {
     console.error('PlayController', `onError: ${error}`)
+    this.globalState.setIsLoading(false)
     this.globalState.setIsPlaying(false)
   }
 

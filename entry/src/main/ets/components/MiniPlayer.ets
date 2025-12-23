@@ -1,5 +1,7 @@
 import { Song } from '../model/Song'
+import { PlayMode } from '../model/PlayState'
 import { parseSongFromJson } from '../common/GlobalPlayState'
+import { TimeUtils } from '../common/utils/TimeUtils'
 
 /**
  * 迷你播放器组件（底部悬浮）
@@ -10,20 +12,101 @@ import { parseSongFromJson } from '../common/GlobalPlayState'
 export struct MiniPlayer {
   // 接受 JSON 字符串形式的歌曲数据，便于与 @StorageLink 配合
   @Prop currentSongJson: string = ''
-  @Prop isPlaying: boolean = false
+  @Prop @Watch('onPlayingChange') isPlaying: boolean = false
+  @Prop isLoading: boolean = false // 加载中状态
+  @Prop playMode: number = PlayMode.SEQUENCE // 播放模式
   @Prop progress: number = 0 // 0-100
   @Prop currentPosition: number = 0 // 当前播放位置（毫秒）
   @Prop duration: number = 0 // 总时长（毫秒）
   @State isPressed: boolean = false
   @State isNextPressed: boolean = false
+  @State isModePressed: boolean = false
   @State isPlaylistPressed: boolean = false
   @State isDragging: boolean = false // 是否正在拖动进度条
   @State dragProgress: number = 0 // 拖动时的进度值
+  // 播放状态动画
+  @State private waveHeights: number[] = [4, 8, 5] // 波形高度
+  @State private coverScale: number = 1.0 // 封面缩放（呼吸效果）
+  private waveAnimationTimer: number = -1
+  private coverAnimationTimer: number = -1
   onPlayPauseClick?: () => void
   onNextClick?: () => void
   onPlayerClick?: () => void
   onPlaylistClick?: () => void
+  onPlayModeClick?: () => void // 切换播放模式回调
   onSeek?: (position: number) => void // 拖动进度条回调
+
+  aboutToAppear(): void {
+    if (this.isPlaying) {
+      this.startAnimations()
+    }
+  }
+
+  aboutToDisappear(): void {
+    this.stopAnimations()
+  }
+
+  /**
+   * 监听播放状态变化
+   */
+  onPlayingChange(): void {
+    if (this.isPlaying) {
+      this.startAnimations()
+    } else {
+      this.stopAnimations()
+    }
+  }
+
+  /**
+   * 启动播放动画
+   */
+  private startAnimations(): void {
+    // 波形动画 - 每150ms更新一次
+    if (this.waveAnimationTimer === -1) {
+      this.waveAnimationTimer = setInterval(() => {
+        this.waveHeights = [
+          4 + Math.random() * 6,  // 4-10
+          6 + Math.random() * 6,  // 6-12
+          3 + Math.random() * 7   // 3-10
+        ]
+      }, 150)
+    }
+
+    // 封面呼吸动画 - 每2秒一个周期
+    if (this.coverAnimationTimer === -1) {
+      let expanding = true
+      this.coverAnimationTimer = setInterval(() => {
+        if (expanding) {
+          this.coverScale += 0.005
+          if (this.coverScale >= 1.02) {
+            expanding = false
+          }
+        } else {
+          this.coverScale -= 0.005
+          if (this.coverScale <= 1.0) {
+            expanding = true
+          }
+        }
+      }, 50)
+    }
+  }
+
+  /**
+   * 停止播放动画
+   */
+  private stopAnimations(): void {
+    if (this.waveAnimationTimer !== -1) {
+      clearInterval(this.waveAnimationTimer)
+      this.waveAnimationTimer = -1
+    }
+    if (this.coverAnimationTimer !== -1) {
+      clearInterval(this.coverAnimationTimer)
+      this.coverAnimationTimer = -1
+    }
+    // 重置状态
+    this.waveHeights = [4, 8, 5]
+    this.coverScale = 1.0
+  }
 
   /**
    * 获取当前歌曲对象
@@ -87,13 +170,28 @@ export struct MiniPlayer {
 
   /**
    * 格式化时间显示 (毫秒 -> mm:ss)
+   * 使用统一的 TimeUtils 工具类
    */
   private formatTime(ms: number): string {
     if (ms <= 0) return '--:--'
-    const totalSeconds = Math.floor(ms / 1000)
-    const minutes = Math.floor(totalSeconds / 60)
-    const seconds = totalSeconds % 60
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
+    return TimeUtils.formatDuration(ms)
+  }
+
+  /**
+   * 获取播放模式图标
+   */
+  private getModeIcon(): Resource {
+    switch (this.playMode) {
+      case PlayMode.LOOP:
+        return $r('app.media.ic_mode_loop')
+      case PlayMode.SINGLE:
+        return $r('app.media.ic_mode_single')
+      case PlayMode.SHUFFLE:
+        return $r('app.media.ic_mode_shuffle')
+      case PlayMode.SEQUENCE:
+      default:
+        return $r('app.media.ic_mode_sequence')
+    }
   }
 
   /**
@@ -107,13 +205,15 @@ export struct MiniPlayer {
     Column() {
       // 主内容区域（可点击展开全屏播放页）
       Row() {
-        // 专辑封面 - 带圆角和阴影
+        // 专辑封面 - 带圆角和阴影，播放时有呼吸动画
         Stack() {
           Image(this.getCurrentSong()?.albumArt || $r('app.media.default_album'))
             .width(44)
             .height(44)
             .borderRadius(6)
             .objectFit(ImageFit.Cover)
+            .scale({ x: this.coverScale, y: this.coverScale })
+            .animation({ duration: 100, curve: Curve.Linear })
 
           // 无封面时显示灰色蒙层 + 播放图标提示
           if (!this.hasValidAlbumArt()) {
@@ -130,13 +230,27 @@ export struct MiniPlayer {
             .justifyContent(FlexAlign.Center)
           }
 
-          // 播放中动画指示
-          if (this.isPlaying && this.hasValidSong()) {
+          // 加载中状态 - 显示旋转指示器
+          if (this.isLoading) {
+            Column() {
+              LoadingProgress()
+                .width(24)
+                .height(24)
+                .color('#007AFF')
+            }
+            .width(44)
+            .height(44)
+            .borderRadius(6)
+            .backgroundColor('rgba(255, 255, 255, 0.9)')
+            .justifyContent(FlexAlign.Center)
+          }
+          // 播放中光晕效果
+          else if (this.isPlaying && this.hasValidSong()) {
             Column()
               .width(44)
               .height(44)
               .borderRadius(6)
-              .backgroundColor('rgba(0, 122, 255, 0.08)')
+              .backgroundColor('rgba(0, 122, 255, 0.1)')
           }
         }
         .margin({ left: 12 })
@@ -158,16 +272,17 @@ export struct MiniPlayer {
 
           // 艺术家 + 时间信息
           Row() {
-            // 播放中指示器（仅在有效播放时显示）
+            // 播放中指示器（仅在有效播放时显示）- 动态波形动画
             if (this.isPlaying && this.hasValidSong()) {
               Row() {
-                ForEach([1, 2, 3], (item: number) => {
+                ForEach([0, 1, 2], (index: number) => {
                   Column()
                     .width(2.5)
-                    .height(item === 2 ? 9 : 5)
+                    .height(this.waveHeights[index])
                     .backgroundColor('#007AFF')
                     .borderRadius(1)
                     .margin({ right: 1.5 })
+                    .animation({ duration: 150, curve: Curve.EaseInOut })
                 })
               }
               .margin({ right: 5 })
@@ -255,6 +370,24 @@ export struct MiniPlayer {
           .onClick(() => {
             console.info('MiniPlayer', 'Next button clicked')
             this.onNextClick?.()
+          })
+
+        // 播放模式按钮
+        Image(this.getModeIcon())
+          .width(18)
+          .height(18)
+          .fillColor(this.isModePressed ? '#007AFF' : '#666666')
+          .margin({ left: 6 })
+          .onTouch((event) => {
+            if (event.type === TouchType.Down) {
+              this.isModePressed = true
+            } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+              this.isModePressed = false
+            }
+          })
+          .onClick(() => {
+            console.info('MiniPlayer', 'Play mode button clicked')
+            this.onPlayModeClick?.()
           })
 
         // 播放列表按钮

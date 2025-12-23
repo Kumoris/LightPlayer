@@ -27,8 +27,12 @@ export class PlayStateKeys {
   static readonly CURRENT_SONG: string = 'currentSong'
   // 是否正在播放
   static readonly IS_PLAYING: string = 'isPlaying'
+  // 是否正在加载（准备播放）
+  static readonly IS_LOADING: string = 'isLoading'
   // 当前播放位置（毫秒）
   static readonly CURRENT_POSITION: string = 'currentPosition'
+  // 当前歌曲总时长（毫秒）- 来自实际播放器，比歌曲元数据更准确
+  static readonly CURRENT_DURATION: string = 'currentDuration'
   // 播放模式
   static readonly PLAY_MODE: string = 'playMode'
   // 歌曲列表（JSON字符串形式存储）
@@ -108,9 +112,19 @@ export class GlobalPlayState {
       AppStorage.setOrCreate<boolean>(PlayStateKeys.IS_PLAYING, false)
     }
 
+    // 初始化加载状态
+    if (!AppStorage.has(PlayStateKeys.IS_LOADING)) {
+      AppStorage.setOrCreate<boolean>(PlayStateKeys.IS_LOADING, false)
+    }
+
     // 初始化当前播放位置
     if (!AppStorage.has(PlayStateKeys.CURRENT_POSITION)) {
       AppStorage.setOrCreate<number>(PlayStateKeys.CURRENT_POSITION, 0)
+    }
+
+    // 初始化当前歌曲时长
+    if (!AppStorage.has(PlayStateKeys.CURRENT_DURATION)) {
+      AppStorage.setOrCreate<number>(PlayStateKeys.CURRENT_DURATION, 0)
     }
 
     // 初始化播放模式
@@ -171,10 +185,24 @@ export class GlobalPlayState {
   }
 
   /**
+   * 设置加载状态
+   */
+  setIsLoading(isLoading: boolean): void {
+    AppStorage.set<boolean>(PlayStateKeys.IS_LOADING, isLoading)
+  }
+
+  /**
    * 设置当前播放位置
    */
   setCurrentPosition(position: number): void {
     AppStorage.set<number>(PlayStateKeys.CURRENT_POSITION, position)
+  }
+
+  /**
+   * 设置当前歌曲总时长（来自实际播放器）
+   */
+  setCurrentDuration(duration: number): void {
+    AppStorage.set<number>(PlayStateKeys.CURRENT_DURATION, duration)
   }
 
   /**
