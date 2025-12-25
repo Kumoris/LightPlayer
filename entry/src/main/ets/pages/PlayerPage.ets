@@ -253,7 +253,8 @@ struct PlayerPage {
         .height(24)
         .fillColor('#FFFFFF')
         .onClick(() => {
-          console.info('PlayerPage', 'More button clicked')
+          console.info('PlayerPage', 'More button clicked, navigating to settings')
+          router.pushUrl({ url: 'pages/SettingsPage' })
         })
     }
     .width('100%')
@@ -396,15 +397,15 @@ struct PlayerPage {
 
       // 时间显示
       Row() {
-        // 当前播放时间
-        Text(this.hasValidDuration() ? TimeUtils.formatDuration(this.getDisplayPosition()) : '--:--')
+        // 当前播放时间（始终显示，即使为 0）
+        Text(TimeUtils.formatDuration(this.getDisplayPosition()))
           .fontSize(12)
           .fontColor('rgba(255, 255, 255, 0.6)')
 
         Blank()
 
-        // 总时长（使用实时 duration）
-        Text(this.hasValidDuration() ? TimeUtils.formatDuration(this.getValidDuration()) : '--:--')
+        // 总时长（使用实时 duration，无效时显示 --:--）
+        Text(this.getValidDuration() > 0 ? TimeUtils.formatDuration(this.getValidDuration()) : '--:--')
           .fontSize(12)
           .fontColor('rgba(255, 255, 255, 0.6)')
       }
@@ -486,12 +487,6 @@ struct PlayerPage {
       .height(72)
       .padding({ left: 32, right: 32 })
       .alignItems(VerticalAlign.Center)
-
-      // 播放模式提示（更弱化）
-      Text(this.getModeName())
-        .fontSize(10)
-        .fontColor('rgba(255, 255, 255, 0.35)')
-        .margin({ top: 12 })
     }
     .width('100%')
   }

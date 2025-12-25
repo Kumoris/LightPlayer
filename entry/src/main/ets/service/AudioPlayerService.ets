@@ -598,13 +598,18 @@ export class AudioPlayerService {
     this.stopProgressTimer()
     this.progressTimer = setInterval(() => {
       if (this.avPlayer) {
-        const position = this.avPlayer.currentTime
-        const duration = this.avPlayer.duration
-        // 更新本地状态
-        this.playState.currentPosition = position
-        this.playState.duration = duration
-        // 通知监听器
-        this.notifyProgressChanged(position, duration)
+        const position = this.avPlayer.currentTime || 0
+        const duration = this.avPlayer.duration || 0
+        // 确保值有效
+        if (!isNaN(position) && !isNaN(duration)) {
+          // 更新本地状态
+          this.playState.currentPosition = position
+          if (duration > 0) {
+            this.playState.duration = duration
+          }
+          // 通知监听器（即使 duration 为 0 也通知位置）
+          this.notifyProgressChanged(position, this.playState.duration)
+        }
       }
     }, 500) // 500ms 更新一次，更平滑
   }

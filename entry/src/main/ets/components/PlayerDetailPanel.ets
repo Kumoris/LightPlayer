@@ -1,4 +1,4 @@
-import { promptAction } from '@kit.ArkUI'
+import { promptAction, router } from '@kit.ArkUI'
 import { Song } from '../model/Song'
 import { PlayMode } from '../model/PlayState'
 import { TimeUtils } from '../common/utils/TimeUtils'
@@ -366,7 +366,8 @@ export struct PlayerDetailPanel {
           .height(24)
           .fillColor('#FFFFFF')
           .onClick(() => {
-            console.info('PlayerDetailPanel', 'More button clicked')
+            console.info('PlayerDetailPanel', 'More button clicked, navigating to settings')
+            router.pushUrl({ url: 'pages/SettingsPage' })
           })
       }
       .width('100%')
@@ -544,15 +545,15 @@ export struct PlayerDetailPanel {
 
       // 时间显示
       Row() {
-        // 当前播放时间
-        Text(this.hasValidDuration() ? TimeUtils.formatDuration(this.getDisplayPosition()) : '--:--')
+        // 当前播放时间（始终显示，即使为 0）
+        Text(TimeUtils.formatDuration(this.getDisplayPosition()))
           .fontSize(11)
           .fontColor('rgba(255, 255, 255, 0.6)')
 
         Blank()
 
-        // 总时长（使用实时 duration）
-        Text(this.hasValidDuration() ? TimeUtils.formatDuration(this.getValidDuration()) : '--:--')
+        // 总时长（使用实时 duration，无效时显示 --:--）
+        Text(this.getValidDuration() > 0 ? TimeUtils.formatDuration(this.getValidDuration()) : '--:--')
           .fontSize(11)
           .fontColor('rgba(255, 255, 255, 0.6)')
       }
@@ -569,24 +570,14 @@ export struct PlayerDetailPanel {
     Column() {
       // 主控制按钮行
       Row() {
-        // 播放模式按钮 - 圆角胶囊样式，图标+文字
-        Row() {
-          Image(this.getModeIcon())
-            .width(16)
-            .height(16)
-            .fillColor('#FFFFFF')
-
-          Text(this.getModeName())
-            .fontSize(10)
-            .fontColor('#FFFFFF')
-            .margin({ left: 4 })
-        }
-        .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-        .borderRadius(14)
-        .backgroundColor('rgba(255, 255, 255, 0.2)')
-        .onClick(() => {
-          this.togglePlayMode()
-        })
+        // 播放模式按钮（只保留图标）
+        Image(this.getModeIcon())
+          .width(22)
+          .height(22)
+          .fillColor('rgba(255, 255, 255, 0.5)')
+          .onClick(() => {
+            this.togglePlayMode()
+          })
 
         Blank()
 
@@ -627,27 +618,17 @@ export struct PlayerDetailPanel {
 
         Blank()
 
-        // 播放列表按钮 - 也改为胶囊样式
-        Row() {
-          Image($r('app.media.ic_playlist'))
-            .width(16)
-            .height(16)
-            .fillColor('#FFFFFF')
-
-          Text('列表')
-            .fontSize(10)
-            .fontColor('#FFFFFF')
-            .margin({ left: 4 })
-        }
-        .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-        .borderRadius(14)
-        .backgroundColor('rgba(255, 255, 255, 0.2)')
-        .onClick(() => {
-          this.playQueueDialogController.open()
-        })
+        // 播放列表按钮（只保留图标）
+        Image($r('app.media.ic_playlist'))
+          .width(22)
+          .height(22)
+          .fillColor('rgba(255, 255, 255, 0.5)')
+          .onClick(() => {
+            this.playQueueDialogController.open()
+          })
       }
       .width('100%')
-      .padding({ left: 20, right: 20 })
+      .padding({ left: 32, right: 32 })
       .alignItems(VerticalAlign.Center)
     }
     .width('100%')
