@@ -3,6 +3,7 @@ import { picker } from '@kit.CoreFileKit'
 import { common } from '@kit.AbilityKit'
 import { Song, createSong } from '../model/Song'
 import { SongRepository } from '../data/repository/SongRepository'
+import { MetadataExtractor } from './MetadataExtractor'
 
 /**
  * 支持的音频格式
@@ -60,11 +61,13 @@ export enum ScanStatus {
 export class MusicScanService {
   private static instance: MusicScanService | null = null
   private songRepository: SongRepository
+  private metadataExtractor: MetadataExtractor
   private scanStatus: ScanStatus = ScanStatus.IDLE
   private context: common.UIAbilityContext | null = null
 
   private constructor() {
     this.songRepository = SongRepository.getInstance()
+    this.metadataExtractor = MetadataExtractor.getInstance()
   }
 
   static getInstance(): MusicScanService {
@@ -243,6 +246,17 @@ export class MusicScanService {
         console.warn('MusicScanService', `Cannot get file size for: ${uri}`)
       }
 
+      // 提取智能元数据
+      const metadata = this.metadataExtractor.extractMetadata(
+        title,
+        artist,
+        '未知专辑',
+        uri
+      )
+
+      console.info('MusicScanService',
+        `Metadata for "${title}": ${metadata.genre}, BPM:${metadata.bpm}, Energy:${metadata.energy}, Mood:${metadata.mood}`)
+
       return createSong(
         id,
         title,
@@ -253,7 +267,11 @@ export class MusicScanService {
         '',
         Date.now(),
         fileSize,
-        this.getMimeType(fileName)
+        this.getMimeType(fileName),
+        metadata.genre,
+        metadata.bpm,
+        metadata.energy,
+        metadata.mood
       )
     } catch (error) {
       console.error('MusicScanService', `Parse audio file from URI failed: ${uri}, error: ${JSON.stringify(error)}`)

@@ -536,13 +536,18 @@ struct Index {
    */
   private getPlayModeName(mode: number): string {
     switch (mode) {
+      case PlayMode.SEQUENCE:
+        return '顺序播放'
       case PlayMode.LOOP:
         return '列表循环'
       case PlayMode.SINGLE:
         return '单曲循环'
-      case PlayMode.SHUFFLE:
-        return '随机播放'
-      case PlayMode.SEQUENCE:
+      case PlayMode.SMART_SHUFFLE:
+        return '智能随机'
+      case PlayMode.TIME_AWARE:
+        return '时间感知'
+      case PlayMode.NIGHT_MODE:
+        return '夜间模式'
       default:
         return '顺序播放'
     }
@@ -895,13 +900,13 @@ struct Index {
               .width(16)
               .height(16)
               .fillColor('#007AFF')
-            Text('随机播放')
+            Text('智能随机')
               .fontSize(13)
               .fontColor('#007AFF')
               .margin({ left: 4 })
           }
           .onClick(() => {
-            console.info('Index', 'Random play clicked')
+            console.info('Index', 'Smart shuffle clicked')
             if (this.songs.length > 0) {
               const randomIndex = Math.floor(Math.random() * this.songs.length)
               this.playSong(this.songs[randomIndex], randomIndex)

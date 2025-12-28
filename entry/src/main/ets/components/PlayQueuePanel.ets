@@ -38,13 +38,18 @@ export struct PlayQueuePanel {
    */
   private getPlayModeIcon(): Resource {
     switch (this.playMode) {
+      case PlayMode.SEQUENCE:
+        return $r('app.media.ic_mode_sequence')
       case PlayMode.LOOP:
         return $r('app.media.ic_mode_loop')
       case PlayMode.SINGLE:
         return $r('app.media.ic_mode_single')
-      case PlayMode.SHUFFLE:
+      case PlayMode.SMART_SHUFFLE:
         return $r('app.media.ic_mode_shuffle')
-      case PlayMode.SEQUENCE:
+      case PlayMode.TIME_AWARE:
+        return $r('app.media.ic_mode_sequence')
+      case PlayMode.NIGHT_MODE:
+        return $r('app.media.ic_mode_single')
       default:
         return $r('app.media.ic_mode_sequence')
     }

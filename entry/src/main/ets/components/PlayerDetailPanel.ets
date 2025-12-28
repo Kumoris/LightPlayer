@@ -217,8 +217,12 @@ export struct PlayerDetailPanel {
         return $r('app.media.ic_mode_loop')
       case PlayMode.SINGLE:
         return $r('app.media.ic_mode_single')
-      case PlayMode.SHUFFLE:
+      case PlayMode.SMART_SHUFFLE:
         return $r('app.media.ic_mode_shuffle')
+      case PlayMode.TIME_AWARE:
+        return $r('app.media.ic_mode_sequence')
+      case PlayMode.NIGHT_MODE:
+        return $r('app.media.ic_mode_single')
       default:
         return $r('app.media.ic_mode_sequence')
     }
@@ -235,8 +239,12 @@ export struct PlayerDetailPanel {
         return '列表循环'
       case PlayMode.SINGLE:
         return '单曲循环'
-      case PlayMode.SHUFFLE:
-        return '随机播放'
+      case PlayMode.SMART_SHUFFLE:
+        return '智能随机'
+      case PlayMode.TIME_AWARE:
+        return '时间感知'
+      case PlayMode.NIGHT_MODE:
+        return '夜间模式'
       default:
         return '顺序播放'
     }

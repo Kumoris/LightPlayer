@@ -14,6 +14,12 @@ export class Song {
   size: number = 0
   mimeType: string = ''
 
+  // 智能播放相关元数据
+  genre: string = '' // 流派（摇滚、流行、古典等）
+  bpm: number = 0 // 节奏速度（每分钟节拍数）
+  energy: number = 50 // 能量等级 (0-100，0=舒缓 100=激烈)
+  mood: string = '' // 情绪标签（快乐、悲伤、平静、激动等）
+
   /**
    * 获取格式化的时长字符串 (mm:ss)
    */
@@ -45,7 +51,11 @@ export function createSong(
   albumArt: string = '',
   dateAdded: number = 0,
   size: number = 0,
-  mimeType: string = ''
+  mimeType: string = '',
+  genre: string = '',
+  bpm: number = 0,
+  energy: number = 50,
+  mood: string = ''
 ): Song {
   const song = new Song()
   song.id = id
@@ -58,5 +68,9 @@ export function createSong(
   song.dateAdded = dateAdded
   song.size = size
   song.mimeType = mimeType
+  song.genre = genre
+  song.bpm = bpm
+  song.energy = energy
+  song.mood = mood
   return song
 }

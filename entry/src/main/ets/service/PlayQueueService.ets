@@ -68,11 +68,6 @@ export class PlayQueueService {
     this.globalState.setSongList(songs)
     this.globalState.setCurrentIndex(startIndex)
 
-    // 如果是随机模式，生成随机顺序
-    if (this.playMode === PlayMode.SHUFFLE) {
-      this.generateShuffleOrder()
-    }
-
     // 清空播放历史
     this.playHistory = []
 
@@ -93,11 +88,6 @@ export class PlayQueueService {
     this.audioService.setPlaylist(this.queue, this.currentIndex)
     this.globalState.setSongList(this.queue)
 
-    // 如果是随机模式，更新随机顺序
-    if (this.playMode === PlayMode.SHUFFLE) {
-      this.shuffleOrder.push(this.queue.length - 1)
-    }
-
     this.notifyQueueChanged()
     console.info('PlayQueueService', `Song added to queue: ${song.title}`)
   }
@@ -112,19 +102,6 @@ export class PlayQueueService {
     // 同步
     this.audioService.setPlaylist(this.queue, this.currentIndex)
     this.globalState.setSongList(this.queue)
-
-    // 如果是随机模式，更新随机顺序
-    if (this.playMode === PlayMode.SHUFFLE) {
-      // 在随机顺序中插入
-      const nextShuffleIdx = this.shuffleIndex + 1
-      this.shuffleOrder.splice(nextShuffleIdx, 0, insertIndex)
-      // 更新所有大于等于 insertIndex 的索引
-      for (let i = 0; i < this.shuffleOrder.length; i++) {
-        if (i !== nextShuffleIdx && this.shuffleOrder[i] >= insertIndex) {
-          this.shuffleOrder[i]++
-        }
-      }
-    }
 
     this.notifyQueueChanged()
     console.info('PlayQueueService', `Song added to play next: ${song.title}`)
@@ -155,11 +132,6 @@ export class PlayQueueService {
     this.audioService.setPlaylist(this.queue, this.currentIndex)
     this.globalState.setSongList(this.queue)
     this.globalState.setCurrentIndex(this.currentIndex)
-
-    // 更新随机顺序
-    if (this.playMode === PlayMode.SHUFFLE) {
-      this.generateShuffleOrder()
-    }
 
     // 通知监听器
     this.notifyQueueChanged()
@@ -308,10 +280,6 @@ export class PlayQueueService {
         // 单曲循环，返回当前索引
         return this.currentIndex
 
-      case PlayMode.SHUFFLE:
-        // 随机播放
-        return this.getNextShuffleIndex()
-
       case PlayMode.LOOP:
         // 列表循环
         return (this.currentIndex + 1) % this.queue.length
@@ -338,14 +306,6 @@ export class PlayQueueService {
       case PlayMode.SINGLE:
         // 单曲循环，返回当前索引
         return this.currentIndex
-
-      case PlayMode.SHUFFLE:
-        // 随机播放，从历史记录中获取
-        if (this.playHistory.length > 0) {
-          return this.playHistory.pop() as number
-        }
-        // 没有历史记录，随机选一首
-        return Math.floor(Math.random() * this.queue.length)
 
       case PlayMode.LOOP:
       case PlayMode.SEQUENCE:
@@ -416,11 +376,6 @@ export class PlayQueueService {
     await this.audioService.setPlayMode(mode)
     this.globalState.setPlayMode(mode)
 
-    // 如果切换到随机模式，生成随机顺序
-    if (mode === PlayMode.SHUFFLE) {
-      this.generateShuffleOrder()
-    }
-
     this.notifyPlayModeChanged()
     console.info('PlayQueueService', `Play mode changed to: ${this.getPlayModeName(mode)}`)
   }
@@ -429,7 +384,7 @@ export class PlayQueueService {
    * 切换播放模式
    */
   async togglePlayMode(): Promise<PlayMode> {
-    const modes: PlayMode[] = [PlayMode.SEQUENCE, PlayMode.LOOP, PlayMode.SINGLE, PlayMode.SHUFFLE]
+    const modes: PlayMode[] = [PlayMode.SEQUENCE, PlayMode.LOOP, PlayMode.SINGLE, PlayMode.SMART_SHUFFLE, PlayMode.TIME_AWARE, PlayMode.NIGHT_MODE]
     const currentModeIndex = modes.indexOf(this.playMode)
     const nextMode = modes[(currentModeIndex + 1) % modes.length]
     await this.setPlayMode(nextMode)
@@ -455,8 +410,12 @@ export class PlayQueueService {
         return '列表循环'
       case PlayMode.SINGLE:
         return '单曲循环'
-      case PlayMode.SHUFFLE:
-        return '随机播放'
+      case PlayMode.SMART_SHUFFLE:
+        return '智能随机'
+      case PlayMode.TIME_AWARE:
+        return '时间感知'
+      case PlayMode.NIGHT_MODE:
+        return '夜间模式'
       default:
         return '未知'
     }
@@ -474,8 +433,12 @@ export class PlayQueueService {
         return 'ic_mode_loop'
       case PlayMode.SINGLE:
         return 'ic_mode_single'
-      case PlayMode.SHUFFLE:
+      case PlayMode.SMART_SHUFFLE:
         return 'ic_mode_shuffle'
+      case PlayMode.TIME_AWARE:
+        return 'ic_mode_sequence'
+      case PlayMode.NIGHT_MODE:
+        return 'ic_mode_single'
       default:
         return 'ic_mode_sequence'
     }

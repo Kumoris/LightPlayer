@@ -286,9 +286,6 @@ export class GlobalPlayState {
     let nextIndex: number
 
     switch (playMode) {
-      case PlayMode.SHUFFLE:
-        nextIndex = Math.floor(Math.random() * songList.length)
-        break
       case PlayMode.SINGLE:
         nextIndex = currentIndex
         break
@@ -316,9 +313,6 @@ export class GlobalPlayState {
     let prevIndex: number
 
     switch (playMode) {
-      case PlayMode.SHUFFLE:
-        prevIndex = Math.floor(Math.random() * songList.length)
-        break
       case PlayMode.SINGLE:
         prevIndex = currentIndex
         break
@@ -336,7 +330,7 @@ export class GlobalPlayState {
    * 切换播放模式
    */
   togglePlayMode(): PlayMode {
-    const modes: PlayMode[] = [PlayMode.SEQUENCE, PlayMode.LOOP, PlayMode.SINGLE, PlayMode.SHUFFLE]
+    const modes: PlayMode[] = [PlayMode.SEQUENCE, PlayMode.LOOP, PlayMode.SINGLE, PlayMode.SMART_SHUFFLE, PlayMode.TIME_AWARE, PlayMode.NIGHT_MODE]
     const currentMode = AppStorage.get<number>(PlayStateKeys.PLAY_MODE) ?? PlayMode.SEQUENCE
     const currentModeIndex = modes.indexOf(currentMode)
     const nextMode = modes[(currentModeIndex + 1) % modes.length]

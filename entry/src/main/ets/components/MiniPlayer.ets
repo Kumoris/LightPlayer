@@ -186,11 +186,37 @@ export struct MiniPlayer {
         return $r('app.media.ic_mode_loop')
       case PlayMode.SINGLE:
         return $r('app.media.ic_mode_single')
-      case PlayMode.SHUFFLE:
+      case PlayMode.SMART_SHUFFLE:
         return $r('app.media.ic_mode_shuffle')
+      case PlayMode.TIME_AWARE:
+        return $r('app.media.ic_mode_sequence')
+      case PlayMode.NIGHT_MODE:
+        return $r('app.media.ic_mode_single')
       case PlayMode.SEQUENCE:
       default:
         return $r('app.media.ic_mode_sequence')
+    }
+  }
+
+  /**
+   * 获取播放模式名称
+   */
+  private getModeName(): string {
+    switch (this.playMode) {
+      case PlayMode.SEQUENCE:
+        return '顺序'
+      case PlayMode.LOOP:
+        return '循环'
+      case PlayMode.SINGLE:
+        return '单曲'
+      case PlayMode.SMART_SHUFFLE:
+        return '智能'
+      case PlayMode.TIME_AWARE:
+        return '时段'
+      case PlayMode.NIGHT_MODE:
+        return '夜间'
+      default:
+        return '顺序'
     }
   }
 
@@ -372,23 +398,30 @@ export struct MiniPlayer {
             this.onNextClick?.()
           })
 
-        // 播放模式按钮
-        Image(this.getModeIcon())
-          .width(18)
-          .height(18)
-          .fillColor(this.isModePressed ? '#007AFF' : '#666666')
-          .margin({ left: 6 })
-          .onTouch((event) => {
-            if (event.type === TouchType.Down) {
-              this.isModePressed = true
-            } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
-              this.isModePressed = false
-            }
-          })
-          .onClick(() => {
-            console.info('MiniPlayer', 'Play mode button clicked')
-            this.onPlayModeClick?.()
-          })
+        // 播放模式按钮 - 带文字标签
+        Column() {
+          Image(this.getModeIcon())
+            .width(18)
+            .height(18)
+            .fillColor(this.isModePressed ? '#007AFF' : '#666666')
+
+          Text(this.getModeName())
+            .fontSize(9)
+            .fontColor(this.isModePressed ? '#007AFF' : '#999999')
+            .margin({ top: 2 })
+        }
+        .margin({ left: 6 })
+        .onTouch((event) => {
+          if (event.type === TouchType.Down) {
+            this.isModePressed = true
+          } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+            this.isModePressed = false
+          }
+        })
+        .onClick(() => {
+          console.info('MiniPlayer', 'Play mode button clicked')
+          this.onPlayModeClick?.()
+        })
 
         // 播放列表按钮
         Image($r('app.media.ic_playlist'))

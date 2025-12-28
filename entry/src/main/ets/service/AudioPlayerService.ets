@@ -7,6 +7,7 @@ import { PreferencesManager } from '../data/preferences/PreferencesManager'
 import { BackgroundTaskManager } from './BackgroundTaskManager'
 import { MediaSessionManager, MediaSessionEventListener } from './MediaSessionManager'
 import { AudioFocusManager, AudioFocusChange, AudioFocusListener } from './AudioFocusManager'
+import { SmartPlaybackStrategy } from './SmartPlaybackStrategy'
 
 /**
  * 播放器事件监听器接口
@@ -43,6 +44,9 @@ export class AudioPlayerService {
   private context: Context | null = null
   private wasPlayingBeforeInterrupt: boolean = false
 
+  // 智能播放策略
+  private smartPlaybackStrategy: SmartPlaybackStrategy
+
   // 用于等待 prepared 状态
   private prepareResolve: (() => void) | null = null
   private shouldAutoPlay: boolean = false
@@ -55,6 +59,7 @@ export class AudioPlayerService {
     this.backgroundTaskManager = BackgroundTaskManager.getInstance()
     this.mediaSessionManager = MediaSessionManager.getInstance()
     this.audioFocusManager = AudioFocusManager.getInstance()
+    this.smartPlaybackStrategy = SmartPlaybackStrategy.getInstance()
   }
 
   static getInstance(): AudioPlayerService {
@@ -261,6 +266,10 @@ export class AudioPlayerService {
         this.notifyStateChanged(PlayerState.PLAYING)
         // 更新媒体会话播放状态
         this.updateMediaSessionPlaybackState(true)
+        // 记录播放历史（用于智能播放策略）
+        if (this.currentSong) {
+          this.smartPlaybackStrategy.recordPlay(this.currentSong)
+        }
         break
       case 'paused':
         this.playState.playerState = PlayerState.PAUSED
@@ -472,11 +481,32 @@ export class AudioPlayerService {
       return
     }
 
-    let nextIndex = this.currentIndex + 1
-    if (this.playState.playMode === PlayMode.SHUFFLE) {
-      nextIndex = Math.floor(Math.random() * this.playlist.length)
-    } else if (nextIndex >= this.playlist.length) {
-      nextIndex = 0
+    let nextIndex = this.currentIndex
+
+    // 使用智能播放策略
+    if (this.playState.playMode === PlayMode.SMART_SHUFFLE ||
+        this.playState.playMode === PlayMode.TIME_AWARE ||
+        this.playState.playMode === PlayMode.NIGHT_MODE) {
+      // 使用智能策略选择下一首
+      nextIndex = this.smartPlaybackStrategy.selectNext(
+        this.playState.playMode,
+        this.playlist,
+        this.currentIndex
+      )
+
+      // 如果智能策略返回 -1（不应该发生），回退到顺序播放
+      if (nextIndex === -1 || nextIndex === this.currentIndex) {
+        nextIndex = this.currentIndex + 1
+        if (nextIndex >= this.playlist.length) {
+          nextIndex = 0
+        }
+      }
+    } else {
+      // 顺序播放模式
+      nextIndex = this.currentIndex + 1
+      if (nextIndex >= this.playlist.length) {
+        nextIndex = 0
+      }
     }
 
     // playAtIndex 会自动开始播放
@@ -518,8 +548,10 @@ export class AudioPlayerService {
         }
         break
       case PlayMode.LOOP:
-      case PlayMode.SHUFFLE:
-        // 列表循环或随机播放
+      case PlayMode.SMART_SHUFFLE:
+      case PlayMode.TIME_AWARE:
+      case PlayMode.NIGHT_MODE:
+        // 列表循环、智能模式 - 继续播放下一首
         await this.playNext()
         break
     }
@@ -537,7 +569,14 @@ export class AudioPlayerService {
    * 切换播放模式
    */
   async togglePlayMode(): Promise<PlayMode> {
-    const modes: PlayMode[] = [PlayMode.SEQUENCE, PlayMode.LOOP, PlayMode.SINGLE, PlayMode.SHUFFLE]
+    const modes: PlayMode[] = [
+      PlayMode.SEQUENCE,      // 顺序播放
+      PlayMode.LOOP,          // 列表循环
+      PlayMode.SINGLE,        // 单曲循环
+      PlayMode.SMART_SHUFFLE, // 智能随机
+      PlayMode.TIME_AWARE,    // 时间感知
+      PlayMode.NIGHT_MODE     // 夜间模式
+    ]
     const currentModeIndex = modes.indexOf(this.playState.playMode)
     const nextMode = modes[(currentModeIndex + 1) % modes.length]
     await this.setPlayMode(nextMode)

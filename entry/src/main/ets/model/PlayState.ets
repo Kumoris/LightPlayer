@@ -2,22 +2,38 @@
  * 播放模式枚举
  */
 export enum PlayMode {
-  SEQUENCE = 0,    // 顺序播放
-  LOOP = 1,        // 列表循环
-  SINGLE = 2,      // 单曲循环
-  SHUFFLE = 3      // 随机播放
+  SEQUENCE = 0,       // 顺序播放
+  LOOP = 1,           // 列表循环
+  SINGLE = 2,         // 单曲循环
+  SHUFFLE = 3,        // 随机播放
+  SMART_SHUFFLE = 4,  // 智能随机（避免同专辑/风格连续）
+  TIME_AWARE = 5,     // 时间感知（根据时段选歌）
+  NIGHT_MODE = 6      // 夜间模式（舒缓 + 渐弱）
 }
 
 /**
  * 播放状态枚举
+ * 作为全播放器唯一真相，UI/动效/播放逻辑都只看它
  */
 export enum PlayerState {
-  IDLE = 'idle',
-  PREPARED = 'prepared',
-  PLAYING = 'playing',
-  PAUSED = 'paused',
-  STOPPED = 'stopped',
-  ERROR = 'error'
+  IDLE = 'idle',           // 空闲状态
+  LOADING = 'loading',     // 加载中（准备播放）
+  PREPARED = 'prepared',   // 已准备好
+  PLAYING = 'playing',     // 正在播放
+  PAUSED = 'paused',       // 已暂停
+  STOPPED = 'stopped',     // 已停止
+  ERROR = 'error'          // 错误状态
+}
+
+/**
+ * 动效状态枚举
+ * 用于控制播放器动效的状态
+ */
+export enum AnimationState {
+  IDLE = 'idle',           // 空闲（无动效）
+  SPINNING = 'spinning',   // 旋转中
+  PAUSED = 'paused',       // 暂停（保持角度）
+  LOADING = 'loading'      // 加载动画
 }
 
 /**

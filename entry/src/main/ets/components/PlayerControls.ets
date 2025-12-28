@@ -56,14 +56,21 @@ export struct PlayerControls {
 
       // 控制按钮
       Row() {
-        // 播放模式
-        Image(this.getModeIcon())
-          .width(28)
-          .height(28)
-          .fillColor('#666666')
-          .onClick(() => {
-            this.onModeClick?.()
-          })
+        // 播放模式 - 带文字说明
+        Column() {
+          Image(this.getModeIcon())
+            .width(28)
+            .height(28)
+            .fillColor('#666666')
+
+          Text(this.getModeName())
+            .fontSize(10)
+            .fontColor('#999999')
+            .margin({ top: 4 })
+        }
+        .onClick(() => {
+          this.onModeClick?.()
+        })
 
         Blank()
 
@@ -127,10 +134,33 @@ export struct PlayerControls {
         return $r('app.media.ic_mode_loop')
       case PlayMode.SINGLE:
         return $r('app.media.ic_mode_single')
-      case PlayMode.SHUFFLE:
-        return $r('app.media.ic_mode_shuffle')
+      case PlayMode.SMART_SHUFFLE:
+        return $r('app.media.ic_mode_shuffle') // 使用 shuffle 图标
+      case PlayMode.TIME_AWARE:
+        return $r('app.media.ic_mode_sequence') // 临时使用顺序图标
+      case PlayMode.NIGHT_MODE:
+        return $r('app.media.ic_mode_single') // 临时使用单曲图标
       default:
         return $r('app.media.ic_mode_sequence')
+    }
+  }
+
+  getModeName(): string {
+    switch (this.playMode) {
+      case PlayMode.SEQUENCE:
+        return '顺序播放'
+      case PlayMode.LOOP:
+        return '列表循环'
+      case PlayMode.SINGLE:
+        return '单曲循环'
+      case PlayMode.SMART_SHUFFLE:
+        return '智能随机'
+      case PlayMode.TIME_AWARE:
+        return '时间感知'
+      case PlayMode.NIGHT_MODE:
+        return '夜间模式'
+      default:
+        return '顺序播放'
     }
   }
 }

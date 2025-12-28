@@ -1,6 +1,7 @@
 import { Song } from '../model/Song'
 import { PlayState, PlayMode, PlayerState } from '../model/PlayState'
 import { AudioPlayerService, PlayerEventListener } from '../service/AudioPlayerService'
+import { PromptService } from '../service/PromptService'
 
 /**
  * 播放器ViewModel
@@ -10,6 +11,7 @@ import { AudioPlayerService, PlayerEventListener } from '../service/AudioPlayerS
 export class PlayerViewModel {
   private static instance: PlayerViewModel | null = null
   private playerService: AudioPlayerService
+  private promptService: PromptService
 
   // UI状态
   currentSong: Song | null = null
@@ -23,6 +25,7 @@ export class PlayerViewModel {
 
   private constructor() {
     this.playerService = AudioPlayerService.getInstance()
+    this.promptService = PromptService.getInstance()
     this.setupListener()
   }
 
@@ -136,6 +139,18 @@ export class PlayerViewModel {
    */
   async togglePlayMode(): Promise<void> {
     this.playMode = await this.playerService.togglePlayMode()
+    // 显示模式切换提示
+    this.promptService.showPlayModeToast(this.playMode)
+  }
+
+  /**
+   * 设置播放模式（直接设置，不循环）
+   */
+  async setPlayMode(mode: PlayMode): Promise<void> {
+    await this.playerService.setPlayMode(mode)
+    this.playMode = mode
+    // 显示模式切换提示
+    this.promptService.showPlayModeToast(this.playMode)
   }
 
   /**
@@ -182,10 +197,36 @@ export class PlayerViewModel {
         return 'loop'
       case PlayMode.SINGLE:
         return 'single'
-      case PlayMode.SHUFFLE:
-        return 'shuffle'
+      case PlayMode.SMART_SHUFFLE:
+        return 'smart_shuffle'
+      case PlayMode.TIME_AWARE:
+        return 'time_aware'
+      case PlayMode.NIGHT_MODE:
+        return 'night_mode'
       default:
         return 'sequence'
+    }
+  }
+
+  /**
+   * 获取播放模式显示名称
+   */
+  getPlayModeName(): string {
+    switch (this.playMode) {
+      case PlayMode.SEQUENCE:
+        return '顺序播放'
+      case PlayMode.LOOP:
+        return '列表循环'
+      case PlayMode.SINGLE:
+        return '单曲循环'
+      case PlayMode.SMART_SHUFFLE:
+        return '智能随机'
+      case PlayMode.TIME_AWARE:
+        return '时间感知'
+      case PlayMode.NIGHT_MODE:
+        return '夜间模式'
+      default:
+        return '顺序播放'
     }
   }
 
